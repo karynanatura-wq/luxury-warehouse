@@ -1,1 +1,233 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Warehouse App</title>
+    <style>
+        :root {
+            --bg-cream: #FFFDD0;
+            --header-color: #300300; /* Zmieniony kolor czekolady */
+            --shadow: rgba(0, 0, 0, 0.2);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-cream);
+            font-family: sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background-color: var(--header-color);
+            color: var(--bg-cream);
+            text-align: center;
+            padding: 20px 0;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10;
+        }
+
+        /* Główna siatka - 2 kolumny, wyrównane do środka */
+        .warehouse-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 160px);
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
+            transition: filter 0.5s ease;
+        }
+
+        /* Slot, który trzyma albo pudełko, albo produkt */
+        .slot {
+            width: 160px;
+            height: 160px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .box {
+            width: 100%;
+            height: 100%;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 4px 4px 10px var(--shadow);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2;
+            transition: opacity 0.3s ease, filter 0.3s ease;
+        }
+
+        .box img { width: 80%; height: 80%; object-fit: contain; }
+        .box.active { filter: brightness(0.4); }
+
+        /* Produkty */
+        .product {
+            position: absolute;
+            width: 130px;
+            height: 130px;
+            object-fit: contain;
+            z-index: 3;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Ciężarówka */
+        #truck-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: all 1.2s ease-in-out;
+            z-index: 100;
+        }
+
+        #truck { width: 110px; height: auto; }
+
+        .blur { filter: blur(10px); }
+
+        /* Konfetti */
+        .confetti {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            animation: explode 2.5s ease-out forwards;
+            z-index: 110;
+        }
+
+        @keyframes explode {
+            to { transform: translate(var(--x), var(--y)) rotate(360deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <header id="main-header">Warehouse</header>
+
+    <div class="warehouse-grid" id="grid">
+        <div class="slot" id="s1"></div>
+        <div class="slot" id="s2"></div>
+        <div class="slot" id="s3"></div>
+        <div class="slot" id="s4"></div> <div class="slot" id="s5"></div> <div class="slot" id="s6"></div> </div>
+
+    <div id="truck-container">
+        <img src="truck.png" id="truck">
+    </div>
+
+    <script>
+        let state = 0;
+
+        // Inicjalizacja pudełek w odpowiednich slotach
+        const boxMapping = { s1: 1, s2: 2, s3: 3, s4: 4, s5: 5 };
+        
+        Object.entries(boxMapping).forEach(([slotId, boxNum]) => {
+            const slot = document.getElementById(slotId);
+            const box = document.createElement('div');
+            box.className = 'box';
+            box.id = `box-${boxNum}`;
+            box.innerHTML = `<img src="box${boxNum}.png">`;
+            
+            if (boxNum === 4) {
+                box.style.cursor = 'pointer';
+                box.onclick = handleAction;
+            }
+            slot.appendChild(box);
+        });
+
+        function handleAction() {
+            const box4 = document.getElementById('box-4');
+            const grid = document.getElementById('grid');
+            const header = document.getElementById('main-header');
+
+            if (state === 0) {
+                state = 1;
+                box4.classList.add('active');
+
+                // Ukryj inne pudełka
+                [1, 2, 3, 5].forEach(n => {
+                    document.getElementById(`box-${n}`).style.opacity = '0';
+                });
+
+                // Rozmieść 5 produktów w wolnych slotach (s1, s2, s3, s5, s6)
+                const productSlots = ['s1', 's2', 's3', 's5', 's6'];
+                const b4Rect = box4.getBoundingClientRect();
+
+                productSlots.forEach((slotId, index) => {
+                    const targetSlot = document.getElementById(slotId);
+                    const prod = document.createElement('img');
+                    prod.src = `produkt${index + 1}.png`;
+                    prod.className = 'product';
+                    
+                    // Oblicz startową pozycję względem docelowego slotu (by wyleciały z box 4)
+                    const targetRect = targetSlot.getBoundingClientRect();
+                    const startX = b4Rect.left - targetRect.left;
+                    const startY = b4Rect.top - targetRect.top;
+
+                    prod.style.transform = `translate(${startX}px, ${startY}px) scale(0)`;
+                    targetSlot.appendChild(prod);
+
+                    // Animacja do docelowego miejsca w gridzie
+                    setTimeout(() => {
+                        prod.style.opacity = '1';
+                        prod.style.transform = `translate(0, 0) scale(1)`;
+                    }, 100);
+                });
+
+            } else if (state === 1) {
+                state = 2;
+                const b4Rect = box4.getBoundingClientRect();
+
+                // 1. Produkty wracają do pudełka 4
+                document.querySelectorAll('.product').forEach(p => {
+                    const tRect = p.parentElement.getBoundingClientRect();
+                    const moveX = b4Rect.left - tRect.left;
+                    const moveY = b4Rect.top - tRect.top;
+                    p.style.transform = `translate(${moveX}px, ${moveY}px) scale(0)`;
+                    p.style.opacity = '0';
+                });
+
+                // 2. Animacja ciężarówki i finał
+                setTimeout(() => {
+                    const truck = document.getElementById('truck-container');
+                    const centerY = window.innerHeight / 2;
+                    const tRect = truck.getBoundingClientRect();
+                    
+                    // Przejazd na środek
+                    const moveUp = -(centerY - (tRect.height / 2));
+                    truck.style.transform = `translateX(-50%) translateY(${moveUp}px)`;
+
+                    setTimeout(() => {
+                        grid.classList.add('blur');
+                        header.classList.add('blur');
+                        launchConfetti(truck);
+                    }, 1200);
+                }, 600);
+            }
+        }
+
+        function launchConfetti(launcher) {
+            const rect = launcher.getBoundingClientRect();
+            for (let i = 0; i < 100; i++) {
+                const c = document.createElement("div");
+                c.className = "confetti";
+                c.style.background = `hsl(${Math.random()*360},100%,60%)`;
+                c.style.left = rect.left + rect.width/2 + "px";
+                c.style.top = rect.top + "px";
+                c.style.setProperty("--x", `${(Math.random()-0.5)*800}px`);
+                c.style.setProperty("--y", `${(Math.random()-0.5)*800}px`);
+                document.body.appendChild(c);
+                setTimeout(() => c.remove(), 3000);
+            }
+        }
+    </script>
+</body>
+</html>
 
